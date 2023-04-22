@@ -176,18 +176,22 @@ int main() {
     string username, password, oldPassword, newPassword;
 
     do {
-        cout << "1. Register" << endl;
-        cout << "2. Login" << endl;
-        cout << "3. Reset Password" << endl;
-        cout << "4. Exit" << endl;
-        cout << "Enter your choice: ";
+        cout << "1. 注册Olind账号" << endl;
+        cout << "2. 登录Olind账号" << endl;
+        cout << "3. 重置密码" << endl;
+        cout << "4. 退出Olind账号" << endl;
+        cout << "键入你所需要的操作: ";
         cin >> choice;
 
         switch (choice) {
+        //case1注册
+          //case2登录
+            //case3重置
+              //case4退出
             case 1:
-                cout << "Enter username: ";
+                cout << "在此键入用户名称: ";
                 cin >> username;
-                cout << "Enter password: ";
+                cout << "在此键入用户密码: ";
                 cin >> password;
                 accountSystem.registerUser(username, password);
                 break;
@@ -208,10 +212,10 @@ int main() {
                 accountSystem.resetPassword(username, oldPassword, newPassword);
                 break;
             case 4:
-                cout << "Exiting..." << endl;
+                cout << "正在退出Olind账号..." << endl;
                 break;
             default:
-                cout << "Invalid choice." << endl;
+                cout << "无效的选择[Olind-200] << endl;
                 break;
         }
     } while (choice != 4);
