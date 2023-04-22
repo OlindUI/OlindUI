@@ -2,136 +2,219 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <regex>
+#include <fstream>
+#include <openssl/sha.h>
 
 using namespace std;
 
-class Book {
-    string title;
-    string author;
-    int year;
-    bool available = true;
-
+class User {
+private:
+    string username;
+    string password;
 public:
-    Book(string t, string a, int y) : title(t), author(a), year(y) {}
-
-    string getTitle() const { return title; }
-    string getAuthor() const { return author; }
-    int getYear() const { return year; }
-    bool isAvailable() const { return available; }
-    void setAvailable(bool a) { available = a; }
-
-    friend ostream& operator<<(ostream& os, const Book& book) {
-        os << book.title << "（" << book.author << "，" << book.year << "年）";
-        if (book.available) {
-            os << "（可借）";
-        } else {
-            os << "（已借出）";
-        }
-        return os;
+    User(string username, string password) {
+        this->username = username;
+        this->password = password;
     }
-
-    friend bool operator==(const Book& a, const Book& b) {
-        return a.title == b.title && a.author == b.author && a.year == b.year;
+    string getUsername() {
+        return username;
+    }
+    string getPassword() {
+        return password;
     }
 };
 
-class Library {
-    vector<Book> books;
+class AccountSystem {
+private:
+    vector<User> users;
+    string filename = "users.txt";
 
+    bool checkPasswordStrength(string password) {
+        // Password must contain at least one uppercase letter, one lowercase letter, one number and one special character
+        regex pattern("(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])(?=.*[!@#$%^&*()_+\\-=[\\]{};':\"\\\\|,.<>\\/?]).{8,}");
+        return regex_match(password, pattern);
+    }
+
+    string hashPassword(string password) {
+        unsigned char hash[SHA256_DIGEST_LENGTH];
+        SHA256_CTX sha256;
+        SHA256_Init(&sha256);
+        SHA256_Update(&sha256, password.c_str(), password.length());
+        SHA256_Final(hash, &sha256);
+        stringstream ss;
+        for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+            ss << hex << setw(2) << setfill('0') << (int)hash[i];
+        }
+        return ss.str();
+    }
+
+    bool checkUsernameAndPasswordLength(string username, string password) {
+        // Username and password must be between 6 and 20 characters
+        return username.length() >= 6 && username.length() <= 20 && password.length() >= 6 && password.length() <= 20;
+    }
+
+    bool checkUsernameAndPasswordFormat(string username, string password) {
+        // Username and password must only contain letters, numbers, and underscore
+        regex pattern("[a-zA-Z0-9_]+");
+        return regex_match(username, pattern) && regex_match(password, pattern);
+    }
+
+    bool checkUsernameExists(string username) {
+        for (int i = 0; i < users.size(); i++) {
+            if (users[i].getUsername() == username) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void loadUsersFromFile() {
+        ifstream file(filename);
+        if (file) {
+            string line;
+            while (getline(file, line)) {
+                size_t pos = line.find(":");
+                if (pos != string::npos) {
+                    string username = line.substr(0, pos);
+                    string password = line.substr(pos + 1);
+                    User user(username, password);
+                    users.push_back(user);
+                }
+            }
+            file.close();
+        }
+    }
+
+    void saveUsersToFile() {
+        ofstream file(filename);
+        if (file) {
+            for (int i = 0; i < users.size(); i++) {
+                file << users[i].getUsername() << ":" << users[i].getPassword() << endl;
+            }
+            file.close();
+        }
+    }
 public:
-    void addBook() {
-        if (books.size() >= 100) {
-            cout << "图书馆已满，无法添加新书" << endl;
-        } else {
-            string title, author;
-            int year;
-            cout << "请输入书名：";
-            getline(cin, title);
-            cout << "请输入作者名：";
-            getline(cin, author);
-            cout << "请输入出版年份：";
-            cin >> year;
-            cin.ignore();
-            Book book(title, author, year);
-            auto it = find(books.begin(), books.end(), book);
-            if (it == books.end()) {
-                books.push_back(book);
-                cout << "添加成功" << endl;
-            } else {
-                cout << "该书已存在" << endl;
-            }
-        }
+    AccountSystem() {
+        loadUsersFromFile();
     }
 
-    void searchBook() {
-        cout << "请输入要查询的书名或作者名：";
-        string keyword;
-        getline(cin, keyword);
-        vector<Book> results;
-        for (const auto& book : books) {
-            if (book.getTitle().find(keyword) != string::npos || book.getAuthor().find(keyword) != string::npos) {
-                results.push_back(book);
-            }
+    void registerUser(string username, string password) {
+        if (!checkUsernameAndPasswordLength(username, password)) {
+            cout << "Error: Username and password must be between 6 and 20 characters." << endl;
+            return;
         }
-        if (results.empty()) {
-            cout << "未找到匹配的书籍" << endl;
-        } else {
-            cout << "共找到" << results.size() << "本书：" << endl;
-            for (const auto& book : results) {
-                cout << book << endl;
-            }
+        if (!checkUsernameAndPasswordFormat(username, password)) {
+            cout << "Error: Username and password can only contain letters, numbers, and underscore." << endl;
+            return;
         }
+        if (checkUsernameExists(username)) {
+            cout << "Error: Username already exists." << endl;
+            return;
+        }
+        if (!checkPasswordStrength(password)) {
+            cout << "Error: Password must contain at least one uppercase letter, one lowercase letter, one number and one special character." << endl;
+            return;
+        }
+        string hashedPassword = hashPassword(password);
+        User user(username, hashedPassword);
+        users.push_back(user);
+        saveUsersToFile();
+        cout << "User registered successfully." << endl;
     }
 
-    void borrowBook() {
-        cout << "请输入要借阅的书名：";
-        string title;
-        getline(cin, title);
-        auto it = find_if(books.begin(), books.end(), [&](const Book& book) { return book.getTitle() == title && book.isAvailable(); });
-        if (it != books.end()) {
-            it->setAvailable(false);
-            cout << "借阅成功" << endl;
-        } else {
-            cout << "未找到该书或该书已借出" << endl;
+    void loginUser(string username, string password) {
+        if (!checkUsernameAndPasswordLength(username, password)) {
+            cout << "Error: Username and password must be between 6 and 20 characters." << endl;
+            return;
         }
+        if (!checkUsernameAndPasswordFormat(username, password)) {
+            cout << "Error: Username and password can only contain letters, numbers, and underscore." << endl;
+            return;
+        }
+        string hashedPassword = hashPassword(password);
+        for (int i = 0; i < users.size(); i++) {
+            if (users[i].getUsername() == username && users[i].getPassword() == hashedPassword) {
+                cout << "User logged in successfully." << endl;
+                return;
+            }
+        }
+        cout << "Error: Invalid username or password." << endl;
     }
 
-    void returnBook() {
-        cout << "请输入要归还的书名：";
-        string title;
-        getline(cin, title);
-        auto it = find_if(books.begin(), books.end(), [&](const Book& book) { return book.getTitle() == title && !book.isAvailable(); });
-        if (it != books.end()) {
-            it->setAvailable(true);
-            cout << "归还成功" << endl;
-        } else {
-            cout << "未找到该书或该书未借出" << endl;
+    void resetPassword(string username, string oldPassword, string newPassword) {
+        if (!checkUsernameAndPasswordLength(username, oldPassword) || !checkUsernameAndPasswordLength(username, newPassword)) {
+            cout << "Error: Username and password must be between 6 and 20 characters." << endl;
+            return;
         }
+        if (!checkUsernameAndPasswordFormat(username, oldPassword) || !checkUsernameAndPasswordFormat(username, newPassword)) {
+            cout << "Error: Username and password can only contain letters, numbers, and underscore." << endl;
+            return;
+        }
+        if (!checkPasswordStrength(newPassword)) {
+            cout << "Error: Password must contain at least one uppercase letter, one lowercase letter, one number and one special character." << endl;
+            return;
+        }
+        string hashedOldPassword = hashPassword(oldPassword);
+        string hashedNewPassword = hashPassword(newPassword);
+        for (int i = 0; i < users.size(); i++) {
+            if (users[i].getUsername() == username && users[i].getPassword() == hashedOldPassword) {
+                users[i] = User(username, hashedNewPassword);
+                saveUsersToFile();
+                cout << "Password reset successfully." << endl;
+                return;
+            }
+        }
+        cout << "Error: Invalid username or password." << endl;
     }
 };
 
 int main() {
-    Library library;
-    string command;
+    AccountSystem accountSystem;
+    int choice;
+    string username, password, oldPassword, newPassword;
 
-    while (true) {
-        cout << "请输入命令（add, search, borrow, return, quit）：";
-        getline(cin, command);
+    do {
+        cout << "1. Register" << endl;
+        cout << "2. Login" << endl;
+        cout << "3. Reset Password" << endl;
+        cout << "4. Exit" << endl;
+        cout << "Enter your choice: ";
+        cin >> choice;
 
-        if (command == "add") {
-            library.addBook();
-        } else if (command == "search") {
-            library.searchBook();
-        } else if (command == "borrow") {
-            library.borrowBook();
-        } else if (command == "return") {
-            library.returnBook();
-        } else if (command == "quit") {
-            break;
-        } else {
-            cout << "无效的命令，请重新输入" << endl;
+        switch (choice) {
+            case 1:
+                cout << "Enter username: ";
+                cin >> username;
+                cout << "Enter password: ";
+                cin >> password;
+                accountSystem.registerUser(username, password);
+                break;
+            case 2:
+                cout << "在此键入用户名称: ";
+                cin >> username;
+                cout << "在此键入用户密码: ";
+                cin >> password;
+                accountSystem.loginUser(username, password);
+                break;
+            case 3:
+                cout << "Enter username: ";
+                cin >> username;
+                cout << "在此键入旧的密码: ";
+                cin >> oldPassword;
+                cout << "在此键入新的密码: ";
+                cin >> newPassword;
+                accountSystem.resetPassword(username, oldPassword, newPassword);
+                break;
+            case 4:
+                cout << "Exiting..." << endl;
+                break;
+            default:
+                cout << "Invalid choice." << endl;
+                break;
         }
-    }
+    } while (choice != 4);
 
     return 0;
 }
